@@ -8,257 +8,321 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- SheetJS for Excel Export -->
+    <!-- SheetJS for Excel Export (Optional fallback) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
     <style>
         /* Custom scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans p-4 md:p-8">
 
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2"></div>
 
-    <div class="max-w-4xl mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto">
         <!-- Header -->
-        <header class="mb-8 text-center md:text-left">
-            <h1 class="text-3xl font-bold text-slate-900 flex items-center gap-2 justify-center md:justify-start">
-                <i data-lucide="clipboard-edit" class="text-blue-600 w-8 h-8"></i>
-                SeAH CM CPL LINE 일일현황 일지
-            </h1>
-            <p class="text-slate-500 mt-2">현장에서 발생한 특이사항을 입력하고 저장하세요.</p>
+        <header class="mb-6 flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-3">
+                    <i data-lucide="building-2" class="text-blue-600 w-8 h-8"></i>
+                    SeAH CM CPL LINE 일일현황 일지
+                </h1>
+                <p class="text-slate-500 mt-1 text-sm md:text-base">현장 특이사항을 입력하고 웹 브라우저 저장소에 보관합니다.</p>
+            </div>
+            
+            <!-- 기기 로컬 저장소 안내 문구 -->
+            <div class="flex flex-col items-end gap-1">
+                <div class="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-bold border border-blue-200 shadow-sm">
+                    <i data-lucide="hard-drive" class="w-4 h-4"></i> 내 기기에 저장됨
+                </div>
+            </div>
         </header>
 
-        <!-- Main Content -->
-        <main class="w-full">
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            <!-- Input Area (Expanded Width) -->
-            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[700px]">
-                <div class="bg-slate-100 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-                    <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                        <i data-lucide="pen-line" class="w-5 h-5 text-slate-500"></i>
-                        근무 일지 작성
+            <!-- Left Area: Input Form -->
+            <section class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <h2 class="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                        <i data-lucide="edit-3" class="w-5 h-5 text-blue-500"></i>
+                        근무 일지 작성 및 조회
                     </h2>
-                    <div class="flex gap-2">
-                        <!-- 저장 버튼 (상단) -->
-                        <button onclick="saveRawData()" class="text-sm bg-slate-800 border border-slate-900 text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors duration-200 flex items-center gap-1.5 shadow-sm">
-                            <i data-lucide="save" class="w-4 h-4"></i> 저장
-                        </button>
-                        <button onclick="loadExample()" class="text-sm text-blue-600 border border-blue-200 hover:text-blue-800 hover:bg-blue-50 px-2 py-1.5 rounded transition-colors duration-200 flex items-center gap-1">
-                            <i data-lucide="lightbulb" class="w-4 h-4"></i> 예시
-                        </button>
+                    
+                    <!-- 날짜 선택 (이 값이 변경되면 해당 날짜 데이터를 불러옴) -->
+                    <div class="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-blue-300 shadow-sm ring-2 ring-blue-100">
+                        <label for="reportDate" class="text-sm font-semibold text-slate-600 whitespace-nowrap">조회/작성 일자 :</label>
+                        <input type="date" id="reportDate" onchange="loadDataForDate()" class="text-sm border-none focus:ring-0 text-slate-800 font-bold bg-transparent outline-none cursor-pointer">
                     </div>
                 </div>
-                
-                <div class="p-6 flex-grow flex flex-col gap-6">
-                    <!-- 날짜 선택 -->
-                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-4">
-                        <label class="font-medium text-slate-700 flex items-center gap-2">
-                            <i data-lucide="calendar" class="w-4 h-4 text-slate-500"></i>
-                            근무 일자
-                        </label>
-                        <input type="date" id="reportDate" class="p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white transition-colors duration-200">
-                    </div>
-                    
-                    <!-- 1~3근 입력 폼 -->
-                    <div class="flex-grow flex flex-col gap-5">
-                        <!-- 1근 -->
-                        <div class="flex flex-col gap-2 p-5 bg-white border-2 border-slate-100 rounded-xl shadow-sm focus-within:border-blue-200 transition-colors">
-                            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-                                <span class="font-bold text-slate-800 flex items-center gap-2 text-lg">
-                                    <div class="w-3 h-3 bg-blue-500 rounded-full"></div>1근 (주간)
-                                </span>
-                                <div class="flex items-center gap-2">
-                                    <label class="text-sm text-slate-500">작성자:</label>
-                                    <input type="text" id="writer1" placeholder="성명 입력" class="p-1.5 border border-slate-300 rounded-md text-sm w-32 focus:ring-1 focus:ring-blue-500 bg-white">
-                                </div>
-                            </div>
-                            <textarea id="input1" class="w-full h-24 p-2 border-0 focus:ring-0 resize-none text-base bg-transparent placeholder-slate-400 mt-2" placeholder="1근 업무 내용 및 특이사항 입력..."></textarea>
-                        </div>
-                        
-                        <!-- 2근 -->
-                        <div class="flex flex-col gap-2 p-5 bg-white border-2 border-slate-100 rounded-xl shadow-sm focus-within:border-amber-200 transition-colors">
-                            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-                                <span class="font-bold text-slate-800 flex items-center gap-2 text-lg">
-                                    <div class="w-3 h-3 bg-amber-500 rounded-full"></div>2근 (오후/야간)
-                                </span>
-                                <div class="flex items-center gap-2">
-                                    <label class="text-sm text-slate-500">작성자:</label>
-                                    <input type="text" id="writer2" placeholder="성명 입력" class="p-1.5 border border-slate-300 rounded-md text-sm w-32 focus:ring-1 focus:ring-blue-500 bg-white">
-                                </div>
-                            </div>
-                            <textarea id="input2" class="w-full h-24 p-2 border-0 focus:ring-0 resize-none text-base bg-transparent placeholder-slate-400 mt-2" placeholder="2근 업무 내용 및 특이사항 입력..."></textarea>
-                        </div>
 
-                        <!-- 3근 -->
-                        <div class="flex flex-col gap-2 p-5 bg-white border-2 border-slate-100 rounded-xl shadow-sm focus-within:border-indigo-200 transition-colors">
-                            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-                                <span class="font-bold text-slate-800 flex items-center gap-2 text-lg">
-                                    <div class="w-3 h-3 bg-indigo-500 rounded-full"></div>3근 (심야)
-                                </span>
-                                <div class="flex items-center gap-2">
-                                    <label class="text-sm text-slate-500">작성자:</label>
-                                    <input type="text" id="writer3" placeholder="성명 입력" class="p-1.5 border border-slate-300 rounded-md text-sm w-32 focus:ring-1 focus:ring-blue-500 bg-white">
-                                </div>
-                            </div>
-                            <textarea id="input3" class="w-full h-24 p-2 border-0 focus:ring-0 resize-none text-base bg-transparent placeholder-slate-400 mt-2" placeholder="3근 업무 내용 및 특이사항 입력..."></textarea>
-                        </div>
-                    </div>
+                <div class="p-6 flex-col gap-6 overflow-y-auto" style="max-height: 65vh;">
                     
-                    <!-- 엑셀 다운로드 버튼 (하단) -->
-                    <button onclick="exportToExcel()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-4 rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2 mt-2">
-                        <i data-lucide="file-spreadsheet" class="w-6 h-6"></i>
-                        <span class="text-lg">엑셀 파일로 다운로드</span>
+                    <!-- 1근 -->
+                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-6">
+                        <div class="bg-blue-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                            <span class="font-bold text-blue-800 flex items-center gap-2">
+                                <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded-md">1근</span>
+                                오전 근무조
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm text-slate-600 font-medium">작성자:</label>
+                                <input type="text" id="name1" placeholder="성명 입력" class="border border-slate-300 rounded px-2 py-1 text-sm w-28 focus:ring-1 focus:ring-blue-500 outline-none bg-white">
+                            </div>
+                        </div>
+                        <textarea id="note1" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-700 placeholder-slate-400" placeholder="1근 특이사항 및 인수인계 내용을 입력하세요. (없으면 '특이사항 없음' 기재)"></textarea>
+                    </div>
+
+                    <!-- 2근 -->
+                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-6">
+                        <div class="bg-orange-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                            <span class="font-bold text-orange-800 flex items-center gap-2">
+                                <span class="bg-orange-500 text-white text-xs px-2 py-1 rounded-md">2근</span>
+                                오후 근무조
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm text-slate-600 font-medium">작성자:</label>
+                                <input type="text" id="name2" placeholder="성명 입력" class="border border-slate-300 rounded px-2 py-1 text-sm w-28 focus:ring-1 focus:ring-orange-500 outline-none bg-white">
+                            </div>
+                        </div>
+                        <textarea id="note2" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-orange-500 outline-none bg-white text-slate-700 placeholder-slate-400" placeholder="2근 특이사항 및 인수인계 내용을 입력하세요."></textarea>
+                    </div>
+
+                    <!-- 3근 -->
+                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-4">
+                        <div class="bg-indigo-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                            <span class="font-bold text-indigo-800 flex items-center gap-2">
+                                <span class="bg-indigo-600 text-white text-xs px-2 py-1 rounded-md">3근</span>
+                                야간 근무조
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm text-slate-600 font-medium">작성자:</label>
+                                <input type="text" id="name3" placeholder="성명 입력" class="border border-slate-300 rounded px-2 py-1 text-sm w-28 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
+                            </div>
+                        </div>
+                        <textarea id="note3" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-slate-700 placeholder-slate-400" placeholder="3근 특이사항 및 인수인계 내용을 입력하세요."></textarea>
+                    </div>
+
+                </div>
+                
+                <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
+                    <button onclick="saveDataToWeb()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2">
+                        <i data-lucide="save" class="w-5 h-5"></i>
+                        <span>웹 사이트에 저장하기</span>
+                    </button>
+                    <!-- 만약을 대비한 엑셀 다운로드 버튼 (선택사항) -->
+                    <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2">
+                        <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+                        <span>엑셀 다운로드</span>
                     </button>
                 </div>
             </section>
+
+            <!-- Right Area: Saved Data List -->
+            <section class="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px] lg:h-auto">
+                <div class="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
+                    <h2 class="font-bold flex items-center gap-2">
+                        <i data-lucide="history" class="w-5 h-5 text-blue-300"></i>
+                        저장된 일지 목록
+                    </h2>
+                </div>
+                
+                <!-- 동적으로 추가될 목록 영역 -->
+                <div id="historyList" class="p-4 flex-grow overflow-y-auto flex flex-col gap-3 bg-slate-50">
+                    <!-- Javascript가 여기에 목록을 생성합니다 -->
+                </div>
+            </section>
+
         </main>
     </div>
 
     <script>
-        // Initialize date and icons on load
+        // 초기화
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
+            
+            // 오늘 날짜 기본 설정
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('reportDate').value = today;
+            
+            // 페이지 로드 시 오늘 날짜의 데이터가 있으면 불러오고, 목록 렌더링
+            refreshHistoryList();
+            loadDataForDate();
         });
 
-        // UI Helpers
+        // Toast 알림 함수
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
-            const bgColor = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
+            const bgColor = type === 'success' ? 'bg-blue-600' : 'bg-red-500';
             const icon = type === 'success' ? 'check-circle' : 'alert-circle';
             
             toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-[-100%] opacity-0`;
-            toast.innerHTML = `
-                <i data-lucide="${icon}" class="w-5 h-5"></i>
-                <span class="font-medium">${message}</span>
-            `;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="font-medium">${message}</span>`;
             
             container.appendChild(toast);
             lucide.createIcons();
 
-            setTimeout(() => {
-                toast.classList.remove('translate-y-[-100%]', 'opacity-0');
-            }, 10);
-
+            setTimeout(() => toast.classList.remove('translate-y-[-100%]', 'opacity-0'), 10);
             setTimeout(() => {
                 toast.classList.add('translate-y-[-100%]', 'opacity-0');
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
         }
 
-        function openModal() {
-            const modal = document.getElementById('aiModal');
-            const content = document.getElementById('modalContent');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                content.classList.remove('scale-95');
-            }, 10);
+        // 로컬 스토리지에서 모든 데이터 가져오기
+        function getAllData() {
+            const data = localStorage.getItem('seah_daily_reports');
+            return data ? JSON.parse(data) : {};
         }
 
-        function closeModal() {
-            const modal = document.getElementById('aiModal');
-            const content = document.getElementById('modalContent');
-            modal.classList.add('opacity-0');
-            content.classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            }, 300);
+        // 데이터 저장하기 (웹 스토리지)
+        function saveDataToWeb() {
+            const dateVal = document.getElementById('reportDate').value;
+            if(!dateVal) {
+                showToast('근무 일자를 선택해주세요.', 'error');
+                return;
+            }
+
+            const allData = getAllData();
+
+            // 현재 화면의 데이터 수집
+            const dailyData = {
+                shift1: {
+                    name: document.getElementById('name1').value,
+                    note: document.getElementById('note1').value
+                },
+                shift2: {
+                    name: document.getElementById('name2').value,
+                    note: document.getElementById('note2').value
+                },
+                shift3: {
+                    name: document.getElementById('name3').value,
+                    note: document.getElementById('note3').value
+                },
+                lastUpdated: new Date().toLocaleString('ko-KR')
+            };
+
+            // 선택된 날짜에 데이터 저장 (덮어쓰기)
+            allData[dateVal] = dailyData;
+            localStorage.setItem('seah_daily_reports', JSON.stringify(allData));
+
+            showToast(`${dateVal} 일지가 웹사이트에 저장되었습니다.`);
+            
+            // 우측 목록 갱신
+            refreshHistoryList();
         }
 
-        function loadExample() {
-            document.getElementById('writer1').value = '김철수 계장';
-            document.getElementById('input1').value = '오전에 A구역 자재 정리하다가 B구역 수도관 누수 발견함. 10시쯤. 설비팀에 바로 연락했고 내일 오전 중에 수리하러 온다고 함.';
+        // 특정 날짜의 데이터 불러오기
+        function loadDataForDate(targetDate = null) {
+            // targetDate가 인자로 넘어오면 날짜 입력창을 그 날짜로 바꿈
+            if (targetDate) {
+                document.getElementById('reportDate').value = targetDate;
+            }
             
-            document.getElementById('writer2').value = '이영희 계장';
-            document.getElementById('input2').value = '1근에서 인계받은 B구역 수도관 누수 부위 안전 펜스 설치 완료함. 야간 작업자들 접근 금지 표지판 부착함. 그 외 특이사항 없음.';
+            const dateVal = document.getElementById('reportDate').value;
+            const allData = getAllData();
             
-            document.getElementById('writer3').value = '박지훈 계장';
-            document.getElementById('input3').value = '순찰 중 C구역 조명등 2개 점등 불량 확인. 오전 반에서 교체 요망.';
-            
-            showToast('예시 데이터가 입력되었습니다.');
+            const dayData = allData[dateVal];
+
+            if (dayData) {
+                // 저장된 데이터가 있으면 화면에 채워넣기
+                document.getElementById('name1').value = dayData.shift1.name || '';
+                document.getElementById('note1').value = dayData.shift1.note || '';
+                
+                document.getElementById('name2').value = dayData.shift2.name || '';
+                document.getElementById('note2').value = dayData.shift2.note || '';
+                
+                document.getElementById('name3').value = dayData.shift3.name || '';
+                document.getElementById('note3').value = dayData.shift3.note || '';
+                
+                if(targetDate) showToast(`${dateVal} 일지를 불러왔습니다.`);
+            } else {
+                // 저장된 데이터가 없으면 입력칸 비우기
+                document.getElementById('name1').value = '';
+                document.getElementById('note1').value = '';
+                document.getElementById('name2').value = '';
+                document.getElementById('note2').value = '';
+                document.getElementById('name3').value = '';
+                document.getElementById('note3').value = '';
+            }
         }
 
-        // 텍스트 파일 저장 기능 (상단 버튼)
-        function saveRawData() {
-            const dateVal = document.getElementById('reportDate').value || '미입력';
-            
-            const w1 = document.getElementById('writer1').value || '미입력';
-            const i1 = document.getElementById('input1').value || '특이사항 없음';
-            
-            const w2 = document.getElementById('writer2').value || '미입력';
-            const i2 = document.getElementById('input2').value || '특이사항 없음';
-            
-            const w3 = document.getElementById('writer3').value || '미입력';
-            const i3 = document.getElementById('input3').value || '특이사항 없음';
+        // 우측 저장된 일지 목록 UI 갱신하기
+        function refreshHistoryList() {
+            const allData = getAllData();
+            const listContainer = document.getElementById('historyList');
+            listContainer.innerHTML = ''; // 초기화
 
-            const content = `[SeAH CM CPL LINE 일일현황 일지]\n근무 일자: ${dateVal}\n\n[1근 (주간)]\n작성자: ${w1}\n내용:\n${i1}\n\n[2근 (오후/야간)]\n작성자: ${w2}\n내용:\n${i2}\n\n[3근 (심야)]\n작성자: ${w3}\n내용:\n${i3}`;
+            // 저장된 날짜들을 최신순(내림차순)으로 정렬
+            const sortedDates = Object.keys(allData).sort((a, b) => b.localeCompare(a));
 
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `SeAH_일일현황일지_${dateVal}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            if (sortedDates.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-slate-400 gap-2 mt-10">
+                        <i data-lucide="file-x" class="w-10 h-10 opacity-50"></i>
+                        <p class="text-sm">아직 저장된 일지가 없습니다.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            // 날짜별로 카드 생성
+            sortedDates.forEach(dateStr => {
+                const dayData = allData[dateStr];
+                
+                // 작성된 조 확인 로직
+                let activeShifts = [];
+                if(dayData.shift1.name || dayData.shift1.note) activeShifts.push("1조");
+                if(dayData.shift2.name || dayData.shift2.note) activeShifts.push("2조");
+                if(dayData.shift3.name || dayData.shift3.note) activeShifts.push("3조");
+                
+                const shiftInfo = activeShifts.length > 0 ? `${activeShifts.join(', ')} 작성됨` : '내용 없음';
+
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group";
+                card.onclick = () => loadDataForDate(dateStr); // 클릭 시 해당 날짜 로드
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <h3 class="font-bold text-slate-800 text-md group-hover:text-blue-600 transition-colors">${dateStr}</h3>
+                        <span class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200">${shiftInfo}</span>
+                    </div>
+                    <div class="text-xs text-slate-400 flex items-center gap-1 mt-2">
+                        <i data-lucide="clock" class="w-3 h-3"></i>
+                        저장: ${dayData.lastUpdated || '알 수 없음'}
+                    </div>
+                `;
+                listContainer.appendChild(card);
+            });
             
-            showToast('텍스트 파일로 성공적으로 저장되었습니다.');
+            lucide.createIcons();
         }
 
-        // 엑셀 다운로드 기능
+        // 엑셀 다운로드 (기존 기능 유지)
         function exportToExcel() {
-            const dateVal = document.getElementById('reportDate').value || '미입력';
-            
-            const w1 = document.getElementById('writer1').value || '미입력';
-            const i1 = document.getElementById('input1').value || '특이사항 없음';
-            
-            const w2 = document.getElementById('writer2').value || '미입력';
-            const i2 = document.getElementById('input2').value || '특이사항 없음';
-            
-            const w3 = document.getElementById('writer3').value || '미입력';
-            const i3 = document.getElementById('input3').value || '특이사항 없음';
-
-            // 엑셀 시트 데이터 구성 (배열의 배열 형식)
+            const dateVal = document.getElementById('reportDate').value;
             const wsData = [
                 ["SeAH CM CPL LINE 일일현황 일지"],
                 [],
                 ["근무 일자", dateVal],
                 [],
                 ["근무조", "작성자", "업무 내용 및 특이사항"],
-                ["1근 (주간)", w1, i1],
-                ["2근 (오후/야간)", w2, i2],
-                ["3근 (심야)", w3, i3]
+                ["1근 (주간)", document.getElementById('name1').value, document.getElementById('note1').value],
+                ["2근 (오후/야간)", document.getElementById('name2').value, document.getElementById('note2').value],
+                ["3근 (심야)", document.getElementById('name3').value, document.getElementById('note3').value]
             ];
 
-            // 시트 생성
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-            // 열 너비(Column Width) 설정
-            ws['!cols'] = [
-                { wch: 15 }, // A열: 근무조
-                { wch: 15 }, // B열: 작성자
-                { wch: 80 }  // C열: 업무 내용
-            ];
-
-            // 워크북 생성 및 시트 추가
+            ws['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 80 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "일일현황일지");
-
-            // 파일명 설정 및 다운로드 실행
-            const fileName = `SeAH_일일현황일지_${dateVal}.xlsx`;
-            XLSX.writeFile(wb, fileName);
-            
-            showToast('엑셀 파일이 성공적으로 다운로드 되었습니다.');
+            XLSX.writeFile(wb, `SeAH_일일현황일지_${dateVal}.xlsx`);
         }
     </script>
 </body>

@@ -1,0 +1,1157 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeAH 일일현황 일지</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 700; }
+        .tab-inactive { color: #64748b; border-bottom: 2px solid transparent; }
+        
+        .nav-active { background-color: #1e293b; border-left: 4px solid #3b82f6; color: white; }
+        .nav-inactive { color: #94a3b8; border-left: 4px solid transparent; }
+        .nav-inactive:hover { background-color: #0f172a; color: #f8fafc; }
+
+        /* Fullscreen Overlay */
+        .overlay-active { display: flex !important; }
+        
+        /* Modal for Image Preview */
+        .img-modal-active { display: flex !important; }
+        
+        /* 하위 탭 스타일 */
+        .sub-tab-active { background-color: #e2e8f0; color: #1e293b; font-weight: 700; }
+        .sub-tab-inactive { color: #64748b; }
+        .sub-tab-inactive:hover { background-color: #f1f5f9; }
+        
+        /* 정수리스트 테이블 스타일 */
+        .cleanup-table td, .cleanup-table th { padding: 8px; border: 1px solid #94a3b8; }
+        .cleanup-table input { width: 100%; border: none; outline: none; background: transparent; }
+        .cleanup-table input:focus { border-bottom: 1px solid #3b82f6; }
+    </style>
+</head>
+<body class="bg-slate-100 h-screen overflow-hidden text-slate-800 font-sans flex flex-col md:flex-row relative">
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[110] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ================= 권한 대기 화면 ================= -->
+    <div id="pendingScreen" class="fixed inset-0 bg-slate-900 z-[90] hidden flex-col items-center justify-center text-white">
+        <i data-lucide="clock" class="w-16 h-16 text-amber-400 mb-4 opacity-80"></i>
+        <h2 class="text-2xl font-bold mb-2">접근 권한이 없습니다</h2>
+        <p class="text-slate-400 text-center max-w-md px-4 mb-6">시스템에 연결할 수 없습니다.<br>관리자에게 문의해주세요.</p>
+    </div>
+
+    <!-- ================= 이미지 크게 보기 모달 ================= -->
+    <div id="imagePreviewModal" class="fixed inset-0 bg-black/90 z-[120] hidden flex-col items-center justify-center backdrop-blur-md cursor-pointer" onclick="window.closeImagePreview()">
+        <button class="absolute top-6 right-6 text-white hover:text-red-400 transition-colors bg-black/50 p-2 rounded-full">
+            <i data-lucide="x" class="w-8 h-8"></i>
+        </button>
+        <img id="previewModalImg" src="" alt="미리보기" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl">
+    </div>
+    
+    <!-- ================= 삭제 확인 모달 ================= -->
+    <div id="deleteConfirmModal" class="fixed inset-0 bg-black/60 z-[115] hidden flex-col items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 border border-slate-200 text-center">
+            <div class="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <i data-lucide="alert-triangle" class="w-6 h-6 text-red-600"></i>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2">정말 삭제하시겠습니까?</h3>
+            <p class="text-sm text-slate-500 mb-6" id="deleteConfirmText">이 작업은 되돌릴 수 없습니다.</p>
+            <div class="flex gap-3">
+                <button onclick="window.closeDeleteModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-xl transition-colors">취소</button>
+                <button id="confirmDeleteBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i> 삭제
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 왼쪽 사이드바 ================= -->
+    <aside class="w-full md:w-64 bg-slate-950 text-white flex flex-col flex-shrink-0 z-20 shadow-xl">
+        <div class="p-4 md:p-6 flex items-center gap-3 border-b border-slate-800 justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2 rounded-lg">
+                    <i data-lucide="building-2" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight">SeAH 일지</h1>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex-grow flex flex-col overflow-y-auto">
+            <div class="p-4 flex flex-col gap-2">
+                <!-- 대시보드 (항상 보임) -->
+                <button onclick="window.switchLine('DASHBOARD')" id="nav-DASHBOARD" class="nav-inactive flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-left w-full">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="font-medium text-sm">대시보드</span>
+                </button>
+            </div>
+
+            <div class="px-4 pb-4">
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-3">작업 라인 (CPL)</p>
+                <div class="flex flex-col gap-1">
+                    <button onclick="window.switchLine('CPL_DAILY')" id="nav-CPL_DAILY" class="nav-inactive flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors text-left">
+                        <i data-lucide="clipboard-edit" class="w-4 h-4"></i><span class="font-medium text-sm">일일 현황</span>
+                    </button>
+                    <button onclick="window.switchLine('CPL_CLEANUP')" id="nav-CPL_CLEANUP" class="nav-inactive flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors text-left">
+                        <i data-lucide="list-checks" class="w-4 h-4"></i><span class="font-medium text-sm">정수 리스트</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="px-4 pb-4 border-t border-slate-800 pt-4">
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-3">작업 라인 (CRM)</p>
+                <div class="flex flex-col gap-1">
+                    <button onclick="window.switchLine('CRM_DAILY')" id="nav-CRM_DAILY" class="nav-inactive flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors text-left">
+                        <i data-lucide="clipboard-edit" class="w-4 h-4"></i><span class="font-medium text-sm">일일 현황</span>
+                    </button>
+                    <button onclick="window.switchLine('CRM_DOWNTIME')" id="nav-CRM_DOWNTIME" class="nav-inactive flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors text-left">
+                        <i data-lucide="alert-octagon" class="w-4 h-4"></i><span class="font-medium text-sm">비가동 보고서</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-4 border-t border-slate-800 hidden md:block shrink-0">
+            <div class="flex items-center gap-2 bg-slate-900 px-3 py-2 rounded-lg text-xs">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span id="currentUserEmailDisplay" class="text-slate-300 truncate">접속 중...</span>
+            </div>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 px-4 md:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-10 shadow-sm shrink-0">
+            <h2 id="mainTitle" class="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                로딩 중...
+            </h2>
+            <div id="dateSelectorDiv" class="flex items-center gap-3 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 shadow-inner w-full sm:w-auto justify-center hidden">
+                <label for="reportDate" class="text-sm font-semibold text-slate-600 whitespace-nowrap">조회/작성 일자 :</label>
+                <input type="date" id="reportDate" onchange="window.loadDataForDate()" class="text-sm border-none focus:ring-0 text-blue-700 font-bold bg-transparent outline-none cursor-pointer">
+            </div>
+        </header>
+
+        <!-- Scrollable Content Grid -->
+        <main class="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6 lg:p-8 bg-slate-50 relative">
+            
+            <!-- ====== 0. 대시보드 뷰 ====== -->
+            <div id="dashboardView" class="max-w-7xl mx-auto hidden animate-fade-in flex flex-col gap-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+                    <h3 class="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2 border-b border-slate-100 pb-4">
+                        <i data-lucide="activity" class="text-blue-500"></i> 오늘(<span id="dashTodayDate" class="text-blue-600"></span>)의 작성 현황
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- CPL 현황 -->
+                        <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                            <h4 class="font-bold text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="factory" class="w-4 h-4"></i> CPL 라인 일일현황</h4>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <h5 class="text-xs font-semibold text-slate-500 uppercase mb-2">입측 (Entry)</h5>
+                                    <ul class="space-y-2">
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">1근 주간</span> <div id="st_cpl_en_1"></div></li>
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">2근 오후</span> <div id="st_cpl_en_2"></div></li>
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">3근 야간</span> <div id="st_cpl_en_3"></div></li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h5 class="text-xs font-semibold text-slate-500 uppercase mb-2">출측 (Exit)</h5>
+                                    <ul class="space-y-2">
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">1근 주간</span> <div id="st_cpl_ex_1"></div></li>
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">2근 오후</span> <div id="st_cpl_ex_2"></div></li>
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">3근 야간</span> <div id="st_cpl_ex_3"></div></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- CRM 현황 -->
+                        <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                            <h4 class="font-bold text-slate-700 mb-4 flex items-center gap-2"><i data-lucide="factory" class="w-4 h-4"></i> CRM 라인 일일현황</h4>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <h5 class="text-xs font-semibold text-slate-500 uppercase mb-2">통합 근무 일지</h5>
+                                    <ul class="space-y-2">
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">1근 주간</span> <div id="st_crm_1"></div></li>
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">2근 오후</span> <div id="st_crm_2"></div></li>
+                                        <li class="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-100 shadow-sm"><span class="text-sm font-medium">3근 야간</span> <div id="st_crm_3"></div></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ====== 1. 문서 작성/조회 뷰 (CPL/CRM 공통 레이아웃) ====== -->
+            <div id="reportView" class="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-3 gap-6 hidden animate-fade-in">
+                <!-- Left: Form Area -->
+                <section class="xl:col-span-2 flex flex-col h-full gap-4">
+                    
+                    <!-- Form Content Container -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col flex-1 overflow-hidden min-h-[500px]">
+                        
+                        <!-- ================= CPL 일일현황 폼 ================= -->
+                        <div id="cplDailySection" class="hidden flex flex-col h-full">
+                            <!-- CPL: Tabs (입측 / 출측) -->
+                            <div class="flex border-b border-slate-200 bg-slate-50 shrink-0">
+                                <button onclick="window.switchCplTab('entry')" id="tab-cpl-entry" class="flex-1 py-3 text-center sub-tab-active transition-all focus:outline-none text-sm border-r border-slate-200">
+                                    입측 (Entry)
+                                </button>
+                                <button onclick="window.switchCplTab('exit')" id="tab-cpl-exit" class="flex-1 py-3 text-center sub-tab-inactive transition-all focus:outline-none text-sm">
+                                    출측 (Exit)
+                                </button>
+                            </div>
+                            
+                            <div class="p-6 overflow-y-auto flex-1">
+                                <!-- 입측 -->
+                                <div id="cplEntryContent">
+                                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-5">
+                                        <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between">
+                                            <span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">1근</span> 주간</span>
+                                            <div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name1_entry" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-blue-500 outline-none"></div>
+                                        </div>
+                                        <textarea id="note1_entry" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-blue-500 outline-none text-sm"></textarea>
+                                    </div>
+                                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-5">
+                                        <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between">
+                                            <span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">2근</span> 오후</span>
+                                            <div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name2_entry" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-blue-500 outline-none"></div>
+                                        </div>
+                                        <textarea id="note2_entry" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-blue-500 outline-none text-sm"></textarea>
+                                    </div>
+                                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-2">
+                                        <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between">
+                                            <span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">3근</span> 야간</span>
+                                            <div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name3_entry" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-blue-500 outline-none"></div>
+                                        </div>
+                                        <textarea id="note3_entry" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-blue-500 outline-none text-sm"></textarea>
+                                    </div>
+                                </div>
+                                <!-- 출측 -->
+                                <div id="cplExitContent" class="hidden">
+                                    <div class="mb-5 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div class="flex items-center gap-2"><label class="text-xs font-semibold text-slate-600 whitespace-nowrap">나이프 Size(1)</label><input type="text" id="knife_size_1" class="border border-slate-300 rounded px-2 py-1 text-sm w-full bg-white"></div>
+                                            <div class="flex items-center gap-2"><label class="text-xs font-semibold text-slate-600 whitespace-nowrap">나이프 Size(2)</label><input type="text" id="knife_size_2" class="border border-slate-300 rounded px-2 py-1 text-sm w-full bg-white"></div>
+                                            <div class="flex items-center gap-2"><label class="text-xs font-semibold text-slate-600 whitespace-nowrap">방청유 수량</label><input type="text" id="oil_quantity" class="border border-slate-300 rounded px-2 py-1 text-sm w-full bg-white"></div>
+                                        </div>
+                                    </div>
+                                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-5">
+                                        <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between">
+                                            <span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">1근</span> 주간</span>
+                                            <div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name1_exit" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-indigo-500 outline-none"></div>
+                                        </div>
+                                        <textarea id="note1_exit" rows="2" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-indigo-500 outline-none text-sm"></textarea>
+                                    </div>
+                                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-5">
+                                        <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between">
+                                            <span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">2근</span> 오후</span>
+                                            <div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name2_exit" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-indigo-500 outline-none"></div>
+                                        </div>
+                                        <textarea id="note2_exit" rows="2" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-indigo-500 outline-none text-sm"></textarea>
+                                    </div>
+                                    <div class="border border-slate-200 rounded-xl overflow-hidden mb-2">
+                                        <div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between">
+                                            <span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">3근</span> 야간</span>
+                                            <div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name3_exit" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-indigo-500 outline-none"></div>
+                                        </div>
+                                        <textarea id="note3_exit" rows="2" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-indigo-500 outline-none text-sm"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ================= CPL 정수리스트 폼 ================= -->
+                        <div id="cplCleanupSection" class="hidden flex flex-col h-full overflow-y-auto p-6">
+                            <div class="border-2 border-slate-800 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+                                <div class="mb-4 sm:mb-6 text-center">
+                                    <h2 class="text-2xl sm:text-3xl font-black text-slate-800 tracking-wider mb-2">정 수 리 스 트</h2>
+                                    <div class="h-1 bg-slate-800 w-full mb-1"></div>
+                                    <div class="h-0.5 bg-slate-800 w-full"></div>
+                                </div>
+
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-center border-collapse border border-slate-800 cleanup-table min-w-[600px]">
+                                        <tr class="bg-slate-200 font-bold text-slate-800 text-base">
+                                            <th colspan="2" class="py-3 uppercase tracking-widest">정 수 리 스 트</th>
+                                        </tr>
+                                        <tr>
+                                            <th class="w-24 bg-slate-100 uppercase text-xs">Section</th>
+                                            <th class="bg-slate-100 text-center px-4 uppercase text-xs">항목 및 내용</th>
+                                        </tr>
+                                        <!-- ENTRY -->
+                                        <tr>
+                                            <th rowspan="3" class="bg-slate-50 uppercase tracking-wider">Entry</th>
+                                            <td class="p-0"><input type="text" id="cl_entry_1" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td>
+                                        </tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_entry_2" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_entry_3" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <!-- PROCESS -->
+                                        <tr>
+                                            <th rowspan="6" class="bg-slate-50 uppercase tracking-wider">Process</th>
+                                            <td class="p-0"><input type="text" id="cl_proc_1" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td>
+                                        </tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_proc_2" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_proc_3" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_proc_4" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_proc_5" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_proc_6" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <!-- EXIT -->
+                                        <tr>
+                                            <th rowspan="4" class="bg-slate-50 uppercase tracking-wider">Exit</th>
+                                            <td class="p-0"><input type="text" id="cl_exit_1" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td>
+                                        </tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_exit_2" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_exit_3" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_exit_4" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td></tr>
+                                        <!-- 기계 -->
+                                        <tr>
+                                            <th rowspan="3" class="bg-slate-50 uppercase tracking-wider">기계</th>
+                                            <td class="p-0"><input type="text" id="cl_mech_1" class="px-2 py-1 w-full text-xs sm:text-sm text-left"></td>
+                                        </tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_mech_2" class="px-2 py-1 w-full text-xs sm:text-sm"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_mech_3" class="px-2 py-1 w-full text-xs sm:text-sm"></td></tr>
+                                        <!-- 전기 -->
+                                        <tr>
+                                            <th rowspan="3" class="bg-slate-50 uppercase tracking-wider">전기</th>
+                                            <td class="p-0"><input type="text" id="cl_elec_1" class="px-2 py-1 w-full text-xs sm:text-sm"></td>
+                                        </tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_elec_2" class="px-2 py-1 w-full text-xs sm:text-sm"></td></tr>
+                                        <tr><td class="p-0"><input type="text" id="cl_elec_3" class="px-2 py-1 w-full text-xs sm:text-sm"></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ================= CRM 일일현황 폼 ================= -->
+                        <div id="crmDailySection" class="hidden flex flex-col h-full overflow-y-auto p-6">
+                            
+                            <!-- 1. 불량 현황 -->
+                            <div class="mb-5 bg-red-50 border border-red-100 rounded-xl overflow-hidden">
+                                <div class="p-3 border-b border-red-100 bg-red-100/50"><h4 class="text-sm font-bold text-red-800 flex items-center gap-2"><i data-lucide="alert-triangle" class="w-4 h-4"></i> 1. 불량 현황 보고</h4></div>
+                                <div class="p-2 overflow-x-auto">
+                                    <table class="w-full text-left border-collapse min-w-[600px]">
+                                        <thead><tr class="text-xs text-red-800 border-b border-red-200"><th class="pb-2 px-2">Batch</th><th class="pb-2 px-2">유형</th><th class="pb-2 px-2">사이즈</th><th class="pb-2 px-2">등급</th><th class="pb-2 px-2">중량</th><th class="pb-2 px-2 w-[30%]">특이사항</th></tr></thead>
+                                        <tbody id="defectBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- 2. 비가동 현황 -->
+                            <div class="mb-6 bg-amber-50 border border-amber-100 rounded-xl overflow-hidden">
+                                <div class="p-3 border-b border-amber-100 bg-amber-100/50"><h4 class="text-sm font-bold text-amber-800 flex items-center gap-2"><i data-lucide="pause-circle" class="w-4 h-4"></i> 2. 비가동 현황</h4></div>
+                                <div class="p-2 overflow-x-auto">
+                                    <table class="w-full text-left border-collapse min-w-[600px]">
+                                        <thead><tr class="text-xs text-amber-800 border-b border-amber-200"><th class="pb-2 px-2">시작시간</th><th class="pb-2 px-2">종료시간</th><th class="pb-2 px-2">총시간</th><th class="pb-2 px-2 w-[25%]">내역</th><th class="pb-2 px-2 w-[30%]">특이사항</th></tr></thead>
+                                        <tbody id="downBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- 3. 시간대별 근무 일지 -->
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-bold text-slate-700">3. 시간대별 근무 일지</h4>
+                                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                                    <label class="text-xs font-semibold text-slate-600">압연유 재고량 :</label>
+                                    <input type="text" id="rolling_oil_qty" class="border-none bg-transparent w-24 text-sm font-bold text-teal-700 text-right outline-none">
+                                </div>
+                            </div>
+                            
+                            <div class="border border-slate-200 rounded-xl overflow-hidden mb-4"><div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between"><span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">1근</span> 주간</span><div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name1_crm" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-teal-500 outline-none"></div></div><textarea id="note1_crm" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-teal-500 outline-none text-sm"></textarea></div>
+                            <div class="border border-slate-200 rounded-xl overflow-hidden mb-4"><div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between"><span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">2근</span> 오후</span><div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name2_crm" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-teal-500 outline-none"></div></div><textarea id="note2_crm" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-teal-500 outline-none text-sm"></textarea></div>
+                            <div class="border border-slate-200 rounded-xl overflow-hidden mb-2"><div class="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between"><span class="font-bold text-slate-700 flex items-center gap-2 text-sm"><span class="bg-slate-700 text-white text-xs px-2 py-0.5 rounded">3근</span> 야간</span><div class="flex items-center gap-2"><label class="text-xs text-slate-500">작성자:</label><input type="text" id="name3_crm" class="border border-slate-300 rounded px-2 py-1 text-sm w-24 focus:ring-1 focus:ring-teal-500 outline-none"></div></div><textarea id="note3_crm" rows="3" class="w-full p-4 border-none resize-none focus:ring-2 focus:ring-teal-500 outline-none text-sm"></textarea></div>
+                        </div>
+
+                        <!-- ================= CRM 비가동 발생 보고서 폼 ================= -->
+                        <div id="crmDowntimeSection" class="hidden flex flex-col h-full overflow-y-auto p-6 bg-slate-100">
+                            <div class="border border-slate-300 bg-white p-6 sm:p-8 rounded-xl shadow-lg max-w-4xl mx-auto w-full">
+                                
+                                <div class="text-center mb-8 border-b-2 border-slate-800 pb-4">
+                                    <h2 class="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight">비가동 발생 보고서</h2>
+                                </div>
+
+                                <table class="w-full border-collapse border border-slate-800 mb-6 text-sm text-center">
+                                    <tr>
+                                        <th class="border border-slate-800 bg-slate-200 p-2.5 w-1/5">조사자</th>
+                                        <td class="border border-slate-800 p-0 w-3/10"><input type="text" id="dt_investigator" class="w-full h-full p-2.5 outline-none text-center"></td>
+                                        <th class="border border-slate-800 bg-slate-200 p-2.5 w-1/5">일 시</th>
+                                        <td class="border border-slate-800 p-0 w-3/10"><input type="text" id="dt_datetime" class="w-full h-full p-2.5 outline-none text-center"></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="border border-slate-800 bg-slate-200 p-2.5">조사일시</th>
+                                        <td class="border border-slate-800 p-0"><input type="date" id="dt_investigate_date" class="w-full h-full p-2.5 outline-none text-center"></td>
+                                        <th class="border border-slate-800 bg-slate-200 p-2.5">설비명</th>
+                                        <td class="border border-slate-800 p-0"><input type="text" id="dt_equipment" value="CRM" class="w-full h-full p-2.5 outline-none text-center bg-slate-50" readonly></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="border border-slate-800 bg-slate-200 p-2.5">사고개요</th>
+                                        <td colspan="3" class="border border-slate-800 p-0"><input type="text" id="dt_summary" class="w-full h-full p-2.5 outline-none text-left"></td>
+                                    </tr>
+                                </table>
+
+                                <div class="border border-slate-800 min-h-[150px] mb-6 p-0">
+                                    <textarea id="dt_details" class="w-full h-full min-h-[150px] p-4 resize-y outline-none text-sm leading-relaxed" placeholder="- 내용 입력..."></textarea>
+                                </div>
+
+                                <table class="w-full border-collapse border border-slate-800 mb-6 text-sm">
+                                    <tr>
+                                        <th class="border border-slate-800 bg-slate-200 p-2.5 w-1/4 text-center">사고피해</th>
+                                        <td class="border border-slate-800 p-0"><input type="text" id="dt_damage" class="w-full h-full p-2.5 outline-none text-left" placeholder="비가동 (00:00~00:00 00분)"></td>
+                                    </tr>
+                                </table>
+
+                                <!-- 사진 첨부 영역 -->
+                                <div class="border border-slate-800 mb-6 relative group overflow-hidden bg-slate-50 min-h-[200px] flex items-center justify-center flex-col">
+                                    <input type="file" id="dt_image_upload" accept="image/*" class="hidden" onchange="window.handleImageUpload(event)">
+                                    
+                                    <div id="dt_image_placeholder" class="text-center p-8 flex flex-col items-center gap-3 cursor-pointer" onclick="document.getElementById('dt_image_upload').click()">
+                                        <div class="bg-blue-100 p-4 rounded-full text-blue-600"><i data-lucide="image-plus" class="w-8 h-8"></i></div>
+                                        <p class="text-slate-500 font-medium">클릭하여 현장 사진을 첨부하세요</p>
+                                        <p class="text-xs text-slate-400">(선택 사항, 자동으로 압축되어 1장만 저장됩니다.)</p>
+                                    </div>
+                                    
+                                    <img id="dt_image_preview" src="" class="hidden w-full h-auto object-cover max-h-[400px] cursor-pointer" onclick="window.openImagePreview(this.src)" title="클릭하면 크게 보입니다">
+                                    
+                                    <!-- 사진 삭제 버튼 -->
+                                    <button id="dt_image_remove_btn" onclick="window.removeImage()" class="hidden absolute top-3 right-3 bg-red-600/80 hover:bg-red-600 text-white p-2 rounded-full backdrop-blur-sm transition-all shadow-md">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+
+                                <table class="w-full border-collapse border border-slate-800 text-sm mb-0">
+                                    <tr>
+                                        <th class="border border-slate-800 bg-slate-200 p-2 text-center">조치 내용</th>
+                                    </tr>
+                                    <tr>
+                                        <td class="border border-slate-800 p-0"><textarea id="dt_action" class="w-full p-3 min-h-[80px] outline-none resize-y"></textarea></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="border border-slate-800 bg-slate-200 p-2 text-center">재발 방지 대책</th>
+                                    </tr>
+                                    <tr>
+                                        <td class="border border-slate-800 p-0"><textarea id="dt_prevention" class="w-full p-3 min-h-[80px] outline-none resize-y"></textarea></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    <!-- Buttons -->
+                    <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row gap-3 shrink-0">
+                        <button id="saveBtn" onclick="window.saveDataToServer()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition-all duration-200 flex items-center justify-center gap-2">
+                            <i data-lucide="save" class="w-5 h-5"></i><span id="saveBtnText">저장하기</span>
+                        </button>
+                        <button onclick="window.exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+                            <i data-lucide="file-spreadsheet" class="w-5 h-5"></i><span>엑셀 다운로드</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Right: Saved Data History & Search -->
+                <section class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-[500px] xl:h-auto">
+                    <div class="bg-slate-50 border-b border-slate-200 p-4 flex flex-col gap-3 shrink-0">
+                        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="history" class="w-5 h-5 text-blue-500"></i><span id="historyTitle">서버 저장 목록</span></h2>
+                        
+                        <!-- 기간 검색 영역 -->
+                        <div class="flex flex-col gap-2 bg-white p-3 rounded-lg border border-slate-200 shadow-inner">
+                            <span class="text-xs font-semibold text-slate-500"><i data-lucide="filter" class="w-3 h-3 inline mr-1"></i>기간 조회</span>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <div class="flex items-center gap-1 flex-1">
+                                    <input type="date" id="searchStartDate" class="border border-slate-300 rounded px-2 py-1 text-xs w-full outline-none focus:ring-1 focus:ring-blue-500 text-slate-600">
+                                    <span class="text-slate-400 text-xs">~</span>
+                                    <input type="date" id="searchEndDate" class="border border-slate-300 rounded px-2 py-1 text-xs w-full outline-none focus:ring-1 focus:ring-blue-500 text-slate-600">
+                                </div>
+                                <button onclick="window.filterHistory()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-3 py-1.5 rounded flex items-center justify-center gap-1 shrink-0 whitespace-nowrap transition-colors">
+                                    <i data-lucide="search" class="w-3 h-3"></i> 조회
+                                </button>
+                                <button onclick="window.resetFilter()" class="bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs px-2 py-1.5 rounded flex items-center justify-center shrink-0 transition-colors" title="필터 초기화">
+                                    <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="historyList" class="p-3 flex-grow overflow-y-auto flex flex-col gap-2 bg-slate-50/50"></div>
+                </section>
+            </div>
+
+        </main>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global State
+        window.currentLine = 'DASHBOARD'; 
+        window.currentCplSide = 'entry'; 
+        
+        let app, auth, db, appId;
+        let allServerData = {};
+        let filteredDataDates = [];
+        let currentUnsubscribe = null;
+        let dashUnsubCPL = null;
+        let dashUnsubCRM = null;
+
+        // CRM Table Generator
+        const createTableRows = (idPrefix, count, isDown = false) => {
+            let html = '';
+            for(let i=1; i<=count; i++) {
+                if(isDown) {
+                    html += `<tr class="border-b border-amber-100 last:border-0">
+                        <td class="p-1"><input type="text" id="${idPrefix}start_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}end_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}total_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}detail_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}note_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                    </tr>`;
+                } else {
+                    html += `<tr class="border-b border-red-100 last:border-0">
+                        <td class="p-1"><input type="text" id="${idPrefix}batch_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}type_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}size_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}grade_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}weight_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                        <td class="p-1"><input type="text" id="${idPrefix}note_${i}" class="w-full px-2 py-1.5 text-xs border rounded bg-white outline-none"></td>
+                    </tr>`;
+                }
+            }
+            return html;
+        };
+
+        const getTodayString = () => {
+            const t = new Date();
+            const y = t.getFullYear();
+            const m = String(t.getMonth() + 1).padStart(2, '0');
+            const d = String(t.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        window.renderDashStatus = function(elementId, isCompleted, author = '') {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            if (isCompleted) {
+                el.innerHTML = `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"><i data-lucide="check-circle-2" class="w-3 h-3"></i>작성완료 (${author})</span>`;
+            } else {
+                el.innerHTML = `<span class="bg-slate-200 text-slate-500 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-300"><i data-lucide="circle-dashed" class="w-3 h-3"></i>미작성</span>`;
+            }
+            if (window.lucide) window.lucide.createIcons();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('defectBody').innerHTML = createTableRows('defect_', 4, false);
+            document.getElementById('downBody').innerHTML = createTableRows('down_', 4, true);
+            lucide.createIcons();
+            
+            const today = getTodayString();
+            document.getElementById('reportDate').value = today;
+            document.getElementById('dashTodayDate').innerText = today;
+            
+            // 오늘 날짜를 검색 기본값으로 설정
+            const firstDayOfMonth = today.substring(0,8) + '01';
+            document.getElementById('searchStartDate').value = firstDayOfMonth;
+            document.getElementById('searchEndDate').value = today;
+
+            const ids = ['st_cpl_en_1','st_cpl_en_2','st_cpl_en_3','st_cpl_ex_1','st_cpl_ex_2','st_cpl_ex_3','st_crm_1','st_crm_2','st_crm_3'];
+            ids.forEach(id => window.renderDashStatus(id, false));
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const active = document.activeElement;
+                    if (active && active.tagName === 'INPUT' && active.closest('#crmDailySection table')) {
+                        e.preventDefault();
+                        const inputs = Array.from(active.closest('table').querySelectorAll('input'));
+                        const idx = inputs.indexOf(active);
+                        if (idx > -1 && idx < inputs.length - 1) inputs[idx + 1].focus();
+                        else active.blur();
+                    }
+                }
+            });
+        });
+
+        // Toast
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 transform transition-all duration-300 translate-y-[-100%] opacity-0 ${type === 'success' ? 'bg-slate-800' : 'bg-red-600'}`;
+            toast.innerHTML = `<i data-lucide="${type==='success'?'check-circle':'alert-circle'}" class="w-5 h-5 ${type==='success'?'text-emerald-400':''}"></i><span class="text-sm font-medium">${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.classList.remove('translate-y-[-100%]', 'opacity-0'), 10);
+            setTimeout(() => { toast.classList.add('translate-y-[-100%]', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        // --- Firebase Init ---
+        // 주의: GitHub 등 공개 저장소에 배포 시 API 키가 노출되어도 Firestore 보안 규칙이 설정되어 있다면 데이터베이스는 안전합니다.
+        // 하지만 가급적 Google Cloud Console에서 해당 API 키의 'HTTP 리퍼러(도메인)' 제한을 설정하는 것을 권장합니다.
+        const firebaseConfig = {
+            apiKey: "AIzaSyBrzd4zkxdG5DtDxjHwmR2dnP3VGG4hhus",
+            authDomain: "daily-report-common.firebaseapp.com",
+            projectId: "daily-report-common",
+            storageBucket: "daily-report-common.firebasestorage.app",
+            messagingSenderId: "883782338940",
+            appId: "1:883782338940:web:651887519ecfd40202fcf9"
+        };
+
+        try {
+            appId = 'seah-daily-report';
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            
+            signInAnonymously(auth).then((userCredential) => {
+                const user = userCredential.user;
+                document.getElementById('currentUserEmailDisplay').innerText = `접속 완료 (ID: ${user.uid.substring(0,6)})`;
+                window.switchLine('DASHBOARD');
+            }).catch((error) => {
+                console.error("자동 접속 실패:", error);
+                showToast("데이터베이스 접속 실패. Firebase 설정을 확인해주세요.", "error");
+            });
+
+        } catch (err) { console.error("Firebase init error:", err); }
+
+        // --- 사진 업로드 (자동 압축 처리 및 Base64 변환) ---
+        // Firebase Firestore 문서 1개의 최대 용량은 1MB입니다.
+        // Base64 문자열로 저장 시 크기가 약 33% 증가하므로, 사진 원본을 그대로 저장하면 에러가 발생합니다.
+        // 따라서 Canvas API를 통해 이미지의 가로 크기를 줄이고(최대 800px) JPEG로 압축하여 1MB 이하로 맞춥니다.
+        let currentImageBase64 = "";
+
+        window.handleImageUpload = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800; // 가로 최대 해상도 800px로 제한
+                    let scaleSize = 1;
+                    
+                    if (img.width > MAX_WIDTH) {
+                        scaleSize = MAX_WIDTH / img.width;
+                    }
+                    
+                    canvas.width = img.width * scaleSize;
+                    canvas.height = img.height * scaleSize;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    // JPEG 형태로 화질 70% 압축 진행
+                    currentImageBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    // 예상 Base64 용량 계산 후 1MB에 근접하는지 검사 (안전장치)
+                    if (currentImageBase64.length * 0.75 > 900000) {
+                         showToast("압축 후에도 용량이 너무 커서 저장할 수 없습니다.", "error");
+                         window.removeImage();
+                         return;
+                    }
+
+                    document.getElementById('dt_image_preview').src = currentImageBase64;
+                    document.getElementById('dt_image_preview').classList.remove('hidden');
+                    document.getElementById('dt_image_remove_btn').classList.remove('hidden');
+                    document.getElementById('dt_image_placeholder').classList.add('hidden');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.removeImage = function() {
+            currentImageBase64 = "";
+            document.getElementById('dt_image_upload').value = "";
+            document.getElementById('dt_image_preview').src = "";
+            document.getElementById('dt_image_preview').classList.add('hidden');
+            document.getElementById('dt_image_remove_btn').classList.add('hidden');
+            document.getElementById('dt_image_placeholder').classList.remove('hidden');
+        };
+
+        window.openImagePreview = function(src) {
+            if(!src) return;
+            document.getElementById('previewModalImg').src = src;
+            document.getElementById('imagePreviewModal').classList.add('img-modal-active');
+        };
+
+        window.closeImagePreview = function() {
+            document.getElementById('imagePreviewModal').classList.remove('img-modal-active');
+        };
+
+        // --- 삭제 관련 모달 ---
+        let deleteTargetDate = null;
+        window.openDeleteModal = function(dateStr, event) {
+            event.stopPropagation(); // 클릭 이벤트가 카드 선택으로 넘어가는 것 방지
+            deleteTargetDate = dateStr;
+            document.getElementById('deleteConfirmText').innerText = `[${dateStr}] 일지 데이터를 영구적으로 삭제합니다.`;
+            document.getElementById('deleteConfirmModal').classList.replace('hidden', 'flex');
+        };
+
+        window.closeDeleteModal = function() {
+            document.getElementById('deleteConfirmModal').classList.replace('flex', 'hidden');
+            deleteTargetDate = null;
+        };
+
+        document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+            if (!deleteTargetDate || !auth.currentUser) return;
+            
+            const btn = document.getElementById('confirmDeleteBtn');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 삭제 중...';
+            lucide.createIcons();
+            
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', `reports_${window.currentLine}`, deleteTargetDate);
+                await deleteDoc(docRef);
+                showToast(`${deleteTargetDate} 일지가 삭제되었습니다.`, 'success');
+                
+                // 만약 현재 화면에 열려있는 날짜를 삭제했다면 화면 초기화
+                if(document.getElementById('reportDate').value === deleteTargetDate) {
+                    window.loadDataForDate(deleteTargetDate, true); // 빈 데이터 로드 효과
+                }
+            } catch (error) {
+                console.error("Delete error:", error);
+                showToast("삭제 중 오류가 발생했습니다.", "error");
+            } finally {
+                btn.innerHTML = originalHtml;
+                lucide.createIcons();
+                window.closeDeleteModal();
+            }
+        });
+
+        // --- 화면 전환 ---
+        window.switchLine = function(line) {
+            window.currentLine = line;
+            
+            const dashboardView = document.getElementById('dashboardView');
+            const reportView = document.getElementById('reportView');
+            const dateSelectorDiv = document.getElementById('dateSelectorDiv');
+            const mainTitle = document.getElementById('mainTitle');
+            
+            // 사이드바 액티브 상태 변경
+            document.querySelectorAll('aside button').forEach(b => {
+                b.classList.replace('nav-active', 'nav-inactive');
+            });
+            const activeNav = document.getElementById(`nav-${line}`);
+            if(activeNav) activeNav.classList.replace('nav-inactive', 'nav-active');
+
+            // 뷰 숨김 초기화
+            dashboardView.classList.add('hidden');
+            reportView.classList.add('hidden');
+
+            if (line === 'DASHBOARD') {
+                mainTitle.innerHTML = '오늘의 작성 현황 대시보드';
+                dashboardView.classList.remove('hidden');
+                dateSelectorDiv.classList.add('hidden');
+                if (auth.currentUser) window.initDashboard();
+                return;
+            }
+
+            // 일반 입력/조회 뷰 공통 설정
+            reportView.classList.remove('hidden');
+            dateSelectorDiv.classList.remove('hidden');
+            
+            const secCplDaily = document.getElementById('cplDailySection');
+            const secCplCleanup = document.getElementById('cplCleanupSection');
+            const secCrmDaily = document.getElementById('crmDailySection');
+            const secCrmDowntime = document.getElementById('crmDowntimeSection');
+            const saveBtnText = document.getElementById('saveBtnText');
+            
+            // 섹션 숨김 초기화
+            secCplDaily.classList.add('hidden');
+            secCplCleanup.classList.add('hidden');
+            secCrmDaily.classList.add('hidden');
+            secCrmDowntime.classList.add('hidden');
+
+            if (line === 'CPL_DAILY') {
+                mainTitle.innerHTML = `CM CPL LINE 일일현황`;
+                document.getElementById('historyTitle').innerHTML = `CPL 일일현황 저장 목록`;
+                secCplDaily.classList.remove('hidden');
+                window.switchCplTab(window.currentCplSide);
+            } else if (line === 'CPL_CLEANUP') {
+                mainTitle.innerHTML = `CM CPL LINE 정수리스트`;
+                document.getElementById('historyTitle').innerHTML = `CPL 정수리스트 저장 목록`;
+                secCplCleanup.classList.remove('hidden');
+                saveBtnText.innerText = '정수리스트 저장';
+            } else if (line === 'CRM_DAILY') {
+                mainTitle.innerHTML = `CM CRM LINE 일일현황`;
+                document.getElementById('historyTitle').innerHTML = `CRM 일일현황 저장 목록`;
+                secCrmDaily.classList.remove('hidden');
+                saveBtnText.innerText = '일일현황 전체 저장';
+            } else if (line === 'CRM_DOWNTIME') {
+                mainTitle.innerHTML = `CM CRM LINE 비가동 발생 보고서`;
+                document.getElementById('historyTitle').innerHTML = `CRM 비가동 보고서 저장 목록`;
+                secCrmDowntime.classList.remove('hidden');
+                saveBtnText.innerText = '비가동 보고서 저장';
+            }
+
+            if (auth.currentUser) loadServerData();
+        }
+
+        window.switchCplTab = function(side) {
+            window.currentCplSide = side;
+            const isEntry = side === 'entry';
+            document.getElementById('tab-cpl-entry').className = `flex-1 py-3 text-center ${isEntry ? 'sub-tab-active' : 'sub-tab-inactive'} transition-all focus:outline-none text-sm border-r border-slate-200`;
+            document.getElementById('tab-cpl-exit').className = `flex-1 py-3 text-center ${!isEntry ? 'sub-tab-active' : 'sub-tab-inactive'} transition-all focus:outline-none text-sm`;
+            document.getElementById('cplEntryContent').classList.toggle('hidden', !isEntry);
+            document.getElementById('cplExitContent').classList.toggle('hidden', isEntry);
+            document.getElementById('saveBtnText').innerText = isEntry ? '입측 일지 저장' : '출측 일지 저장';
+        }
+
+        // --- DASHBOARD REALTIME LOAD ---
+        window.initDashboard = function() {
+            if (!auth.currentUser) return;
+            const todayStr = getTodayString();
+            
+            if (dashUnsubCPL) dashUnsubCPL();
+            const cplRef = doc(db, 'artifacts', appId, 'public', 'data', 'reports_CPL_DAILY', todayStr);
+            dashUnsubCPL = onSnapshot(cplRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const en = data.entry || {};
+                    const ex = data.exit || {};
+                    window.renderDashStatus('st_cpl_en_1', !!en.shift1?.name, en.shift1?.name);
+                    window.renderDashStatus('st_cpl_en_2', !!en.shift2?.name, en.shift2?.name);
+                    window.renderDashStatus('st_cpl_en_3', !!en.shift3?.name, en.shift3?.name);
+                    window.renderDashStatus('st_cpl_ex_1', !!ex.shift1?.name, ex.shift1?.name);
+                    window.renderDashStatus('st_cpl_ex_2', !!ex.shift2?.name, ex.shift2?.name);
+                    window.renderDashStatus('st_cpl_ex_3', !!ex.shift3?.name, ex.shift3?.name);
+                } else {
+                    ['st_cpl_en_1','st_cpl_en_2','st_cpl_en_3','st_cpl_ex_1','st_cpl_ex_2','st_cpl_ex_3'].forEach(id => window.renderDashStatus(id, false));
+                }
+            });
+
+            if (dashUnsubCRM) dashUnsubCRM();
+            const crmRef = doc(db, 'artifacts', appId, 'public', 'data', 'reports_CRM_DAILY', todayStr);
+            dashUnsubCRM = onSnapshot(crmRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const sh = data.shifts || {};
+                    window.renderDashStatus('st_crm_1', !!sh.shift1?.name, sh.shift1?.name);
+                    window.renderDashStatus('st_crm_2', !!sh.shift2?.name, sh.shift2?.name);
+                    window.renderDashStatus('st_crm_3', !!sh.shift3?.name, sh.shift3?.name);
+                } else {
+                    ['st_crm_1','st_crm_2','st_crm_3'].forEach(id => window.renderDashStatus(id, false));
+                }
+            });
+        };
+
+        // --- 데이터 쓰기 ---
+        window.saveDataToServer = async function() {
+            if (!auth.currentUser) {
+                showToast("데이터베이스에 연결되지 않았습니다.", "error");
+                return;
+            }
+            const dateVal = document.getElementById('reportDate').value;
+            const saveBtn = document.getElementById('saveBtn');
+            const originalBtnHtml = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin text-white"></i><span class="text-white">저장 중...</span>';
+            lucide.createIcons();
+            
+            let payload = { lastUpdated: new Date().toLocaleString('ko-KR') };
+
+            if (window.currentLine === 'CPL_DAILY') {
+                if (window.currentCplSide === 'entry') {
+                    payload.entry = {
+                        shift1: { name: document.getElementById('name1_entry').value, note: document.getElementById('note1_entry').value },
+                        shift2: { name: document.getElementById('name2_entry').value, note: document.getElementById('note2_entry').value },
+                        shift3: { name: document.getElementById('name3_entry').value, note: document.getElementById('note3_entry').value }
+                    };
+                } else {
+                    payload.exit = {
+                        knifeSize1: document.getElementById('knife_size_1').value,
+                        knifeSize2: document.getElementById('knife_size_2').value,
+                        oilQuantity: document.getElementById('oil_quantity').value,
+                        shift1: { name: document.getElementById('name1_exit').value, note: document.getElementById('note1_exit').value },
+                        shift2: { name: document.getElementById('name2_exit').value, note: document.getElementById('note2_exit').value },
+                        shift3: { name: document.getElementById('name3_exit').value, note: document.getElementById('note3_exit').value }
+                    };
+                }
+            } else if (window.currentLine === 'CPL_CLEANUP') {
+                payload.entry = {
+                    item1: document.getElementById('cl_entry_1').value, item2: document.getElementById('cl_entry_2').value, item3: document.getElementById('cl_entry_3').value
+                };
+                payload.process = {
+                    item1: document.getElementById('cl_proc_1').value, item2: document.getElementById('cl_proc_2').value,
+                    item3: document.getElementById('cl_proc_3').value, item4: document.getElementById('cl_proc_4').value,
+                    item5: document.getElementById('cl_proc_5').value, item6: document.getElementById('cl_proc_6').value
+                };
+                payload.exit = {
+                    item1: document.getElementById('cl_exit_1').value, item2: document.getElementById('cl_exit_2').value,
+                    item3: document.getElementById('cl_exit_3').value, item4: document.getElementById('cl_exit_4').value
+                };
+                payload.mechanic = { item1: document.getElementById('cl_mech_1').value, item2: document.getElementById('cl_mech_2').value, item3: document.getElementById('cl_mech_3').value };
+                payload.electric = { item1: document.getElementById('cl_elec_1').value, item2: document.getElementById('cl_elec_2').value, item3: document.getElementById('cl_elec_3').value };
+            } else if (window.currentLine === 'CRM_DAILY') {
+                payload.defects = [];
+                for(let i=1; i<=4; i++) {
+                    payload.defects.push({
+                        batch: document.getElementById(`defect_batch_${i}`).value, type: document.getElementById(`defect_type_${i}`).value,
+                        size: document.getElementById(`defect_size_${i}`).value, grade: document.getElementById(`defect_grade_${i}`).value,
+                        weight: document.getElementById(`defect_weight_${i}`).value, note: document.getElementById(`defect_note_${i}`).value
+                    });
+                }
+                payload.downtimes = [];
+                for(let i=1; i<=4; i++) {
+                    payload.downtimes.push({
+                        start: document.getElementById(`down_start_${i}`).value, end: document.getElementById(`down_end_${i}`).value,
+                        total: document.getElementById(`down_total_${i}`).value, detail: document.getElementById(`down_detail_${i}`).value,
+                        note: document.getElementById(`down_note_${i}`).value
+                    });
+                }
+                payload.rollingOil = document.getElementById('rolling_oil_qty').value;
+                payload.shifts = {
+                    shift1: { name: document.getElementById('name1_crm').value, note: document.getElementById('note1_crm').value },
+                    shift2: { name: document.getElementById('name2_crm').value, note: document.getElementById('note2_crm').value },
+                    shift3: { name: document.getElementById('name3_crm').value, note: document.getElementById('note3_crm').value }
+                };
+            } else if (window.currentLine === 'CRM_DOWNTIME') {
+                payload.downtimeReport = {
+                    investigator: document.getElementById('dt_investigator').value,
+                    datetime: document.getElementById('dt_datetime').value,
+                    investigateDate: document.getElementById('dt_investigate_date').value,
+                    summary: document.getElementById('dt_summary').value,
+                    details: document.getElementById('dt_details').value,
+                    damage: document.getElementById('dt_damage').value,
+                    action: document.getElementById('dt_action').value,
+                    prevention: document.getElementById('dt_prevention').value,
+                    imageRef: currentImageBase64 // Base64 이미지 문자열 저장
+                };
+            }
+
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', `reports_${window.currentLine}`, dateVal);
+                await setDoc(docRef, payload, { merge: true });
+                showToast(`${dateVal} 문서가 저장되었습니다.`);
+            } catch (error) {
+                console.error("Save error:", error);
+                // 용량 초과 에러일 확률이 높음
+                showToast("저장 실패. 첨부된 사진 용량이 너무 크거나 네트워크 문제가 발생했습니다.", "error");
+            } 
+            finally {
+                saveBtn.innerHTML = originalBtnHtml;
+                lucide.createIcons();
+            }
+        }
+
+        // --- 데이터 읽기 및 리스트 갱신 ---
+        function loadServerData() {
+            if (!auth.currentUser) return;
+            if (currentUnsubscribe) currentUnsubscribe();
+            
+            const reportsRef = collection(db, 'artifacts', appId, 'public', 'data', `reports_${window.currentLine}`);
+            currentUnsubscribe = onSnapshot(reportsRef, (snapshot) => {
+                allServerData = {}; 
+                snapshot.forEach(doc => { allServerData[doc.id] = doc.data(); });
+                window.filterHistory(); // 기본적으로 전체 리스트 또는 현재 필터 적용하여 그림
+                window.loadDataForDate(null, true);
+            }, (error) => {
+                console.error("Firestore reports listener error:", error);
+            });
+        }
+
+        window.filterHistory = function() {
+            const start = document.getElementById('searchStartDate').value;
+            const end = document.getElementById('searchEndDate').value;
+            
+            filteredDataDates = Object.keys(allServerData).sort((a, b) => b.localeCompare(a));
+            
+            if (start && end) {
+                filteredDataDates = filteredDataDates.filter(dateStr => dateStr >= start && dateStr <= end);
+            }
+            refreshHistoryList();
+        }
+        
+        window.resetFilter = function() {
+            document.getElementById('searchStartDate').value = '';
+            document.getElementById('searchEndDate').value = '';
+            window.filterHistory();
+        }
+
+        function refreshHistoryList() {
+            const list = document.getElementById('historyList');
+            list.innerHTML = '';
+            if (filteredDataDates.length === 0) {
+                list.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 mt-10"><i data-lucide="search-x" class="w-10 h-10 opacity-30 mb-2"></i><p class="text-sm">조회된 기간의 일지가 없습니다.</p></div>`;
+                lucide.createIcons(); return;
+            }
+            filteredDataDates.forEach(dateStr => {
+                const day = allServerData[dateStr];
+                const card = document.createElement('div');
+                card.className = "bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:border-blue-400 cursor-pointer transition-all flex items-center justify-between group";
+                card.onclick = () => window.loadDataForDate(dateStr); 
+                card.innerHTML = `
+                    <div>
+                        <div class="font-bold text-slate-800 text-sm mb-0.5">${dateStr}</div>
+                        <div class="text-[10px] text-slate-400 flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> ${day.lastUpdated || ''}</div>
+                    </div>
+                    <button onclick="window.openDeleteModal('${dateStr}', event)" class="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" title="삭제">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                `;
+                list.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        window.loadDataForDate = function(targetDate = null, silent = false) {
+            if (targetDate) document.getElementById('reportDate').value = targetDate;
+            const dateVal = document.getElementById('reportDate').value;
+            const dayData = allServerData[dateVal] || {};
+
+            if (window.currentLine === 'CPL_DAILY') {
+                const en = dayData.entry || {};
+                const ex = dayData.exit || {};
+                document.getElementById('name1_entry').value = en.shift1?.name || ''; document.getElementById('note1_entry').value = en.shift1?.note || '';
+                document.getElementById('name2_entry').value = en.shift2?.name || ''; document.getElementById('note2_entry').value = en.shift2?.note || '';
+                document.getElementById('name3_entry').value = en.shift3?.name || ''; document.getElementById('note3_entry').value = en.shift3?.note || '';
+                document.getElementById('knife_size_1').value = ex.knifeSize1 || ''; document.getElementById('knife_size_2').value = ex.knifeSize2 || ''; document.getElementById('oil_quantity').value = ex.oilQuantity || '';
+                document.getElementById('name1_exit').value = ex.shift1?.name || ''; document.getElementById('note1_exit').value = ex.shift1?.note || '';
+                document.getElementById('name2_exit').value = ex.shift2?.name || ''; document.getElementById('note2_exit').value = ex.shift2?.note || '';
+                document.getElementById('name3_exit').value = ex.shift3?.name || ''; document.getElementById('note3_exit').value = ex.shift3?.note || '';
+            } else if (window.currentLine === 'CPL_CLEANUP') {
+                const en = dayData.entry || {};
+                const pr = dayData.process || {};
+                const ex = dayData.exit || {};
+                const mc = dayData.mechanic || {};
+                const el = dayData.electric || {};
+                
+                document.getElementById('cl_entry_1').value = en.item1 || ''; document.getElementById('cl_entry_2').value = en.item2 || ''; document.getElementById('cl_entry_3').value = en.item3 || '';
+                document.getElementById('cl_proc_1').value = pr.item1 || ''; document.getElementById('cl_proc_2').value = pr.item2 || '';
+                document.getElementById('cl_proc_3').value = pr.item3 || ''; document.getElementById('cl_proc_4').value = pr.item4 || '';
+                document.getElementById('cl_proc_5').value = pr.item5 || ''; document.getElementById('cl_proc_6').value = pr.item6 || '';
+                document.getElementById('cl_exit_1').value = ex.item1 || ''; document.getElementById('cl_exit_2').value = ex.item2 || '';
+                document.getElementById('cl_exit_3').value = ex.item3 || ''; document.getElementById('cl_exit_4').value = ex.item4 || '';
+                document.getElementById('cl_mech_1').value = mc.item1 || ''; document.getElementById('cl_mech_2').value = mc.item2 || ''; document.getElementById('cl_mech_3').value = mc.item3 || '';
+                document.getElementById('cl_elec_1').value = el.item1 || ''; document.getElementById('cl_elec_2').value = el.item2 || ''; document.getElementById('cl_elec_3').value = el.item3 || '';
+            } else if (window.currentLine === 'CRM_DAILY') {
+                const def = dayData.defects || [];
+                for(let i=1; i<=4; i++) {
+                    document.getElementById(`defect_batch_${i}`).value = def[i-1]?.batch||''; document.getElementById(`defect_type_${i}`).value = def[i-1]?.type||'';
+                    document.getElementById(`defect_size_${i}`).value = def[i-1]?.size||''; document.getElementById(`defect_grade_${i}`).value = def[i-1]?.grade||'';
+                    document.getElementById(`defect_weight_${i}`).value = def[i-1]?.weight||''; document.getElementById(`defect_note_${i}`).value = def[i-1]?.note||'';
+                }
+                const dwn = dayData.downtimes || [];
+                for(let i=1; i<=4; i++) {
+                    document.getElementById(`down_start_${i}`).value = dwn[i-1]?.start||''; document.getElementById(`down_end_${i}`).value = dwn[i-1]?.end||'';
+                    document.getElementById(`down_total_${i}`).value = dwn[i-1]?.total||''; document.getElementById(`down_detail_${i}`).value = dwn[i-1]?.detail||'';
+                    document.getElementById(`down_note_${i}`).value = dwn[i-1]?.note||'';
+                }
+                document.getElementById('rolling_oil_qty').value = dayData.rollingOil || '';
+                const sh = dayData.shifts || {};
+                document.getElementById('name1_crm').value = sh.shift1?.name || ''; document.getElementById('note1_crm').value = sh.shift1?.note || '';
+                document.getElementById('name2_crm').value = sh.shift2?.name || ''; document.getElementById('note2_crm').value = sh.shift2?.note || '';
+                document.getElementById('name3_crm').value = sh.shift3?.name || ''; document.getElementById('note3_crm').value = sh.shift3?.note || '';
+            } else if (window.currentLine === 'CRM_DOWNTIME') {
+                const dt = dayData.downtimeReport || {};
+                document.getElementById('dt_investigator').value = dt.investigator || '';
+                document.getElementById('dt_datetime').value = dt.datetime || '';
+                document.getElementById('dt_investigate_date').value = dt.investigateDate || '';
+                document.getElementById('dt_summary').value = dt.summary || '';
+                document.getElementById('dt_details').value = dt.details || '';
+                document.getElementById('dt_damage').value = dt.damage || '';
+                document.getElementById('dt_action').value = dt.action || '';
+                document.getElementById('dt_prevention').value = dt.prevention || '';
+                
+                // 이미지 복원
+                currentImageBase64 = dt.imageRef || '';
+                if(currentImageBase64) {
+                    document.getElementById('dt_image_preview').src = currentImageBase64;
+                    document.getElementById('dt_image_preview').classList.remove('hidden');
+                    document.getElementById('dt_image_remove_btn').classList.remove('hidden');
+                    document.getElementById('dt_image_placeholder').classList.add('hidden');
+                } else {
+                    window.removeImage();
+                }
+            }
+            if(targetDate && !silent) showToast(`${dateVal} 데이터를 불러왔습니다.`);
+        }
+
+        // --- 엑셀 다운로드 ---
+        window.exportToExcel = function() {
+            const dateVal = document.getElementById('reportDate').value;
+            const line = window.currentLine;
+            let wsData = [];
+            let wscols = [];
+            
+            if (line === 'CPL_DAILY') {
+                wsData = [[`SeAH CM CPL LINE 일일현황 일지`], [], ["근무 일자", dateVal], [], ["[입측 (Entry)]"], ["근무조", "작성자", "업무 내용 및 특이사항"], ["1근", document.getElementById('name1_entry').value, document.getElementById('note1_entry').value], ["2근", document.getElementById('name2_entry').value, document.getElementById('note2_entry').value], ["3근", document.getElementById('name3_entry').value, document.getElementById('note3_entry').value], [], ["[출측 (Exit)]"], ["나이프 Size (1)", document.getElementById('knife_size_1').value], ["나이프 Size (2)", document.getElementById('knife_size_2').value], ["방청유 수량", document.getElementById('oil_quantity').value], [], ["근무조", "작성자", "업무 내용 및 특이사항"], ["1근", document.getElementById('name1_exit').value, document.getElementById('note1_exit').value], ["2근", document.getElementById('name2_exit').value, document.getElementById('note2_exit').value], ["3근", document.getElementById('name3_exit').value, document.getElementById('note3_exit').value]];
+                wscols = [{ wch: 15 }, { wch: 15 }, { wch: 80 }];
+            } else if (line === 'CPL_CLEANUP') {
+                wsData = [
+                    [`정 수 리 스 트`], [], [`일자: ${dateVal}`], [],
+                    ["SECTION", "항목 및 내용"],
+                    ["ENTRY", document.getElementById('cl_entry_1').value],
+                    ["", document.getElementById('cl_entry_2').value],
+                    ["", document.getElementById('cl_entry_3').value],
+                    ["PROCESS", document.getElementById('cl_proc_1').value],
+                    ["", document.getElementById('cl_proc_2').value],
+                    ["", document.getElementById('cl_proc_3').value],
+                    ["", document.getElementById('cl_proc_4').value],
+                    ["", document.getElementById('cl_proc_5').value],
+                    ["", document.getElementById('cl_proc_6').value],
+                    ["EXIT", document.getElementById('cl_exit_1').value],
+                    ["", document.getElementById('cl_exit_2').value],
+                    ["", document.getElementById('cl_exit_3').value],
+                    ["", document.getElementById('cl_exit_4').value],
+                    ["기계", document.getElementById('cl_mech_1').value],
+                    ["", document.getElementById('cl_mech_2').value],
+                    ["", document.getElementById('cl_mech_3').value],
+                    ["전기", document.getElementById('cl_elec_1').value],
+                    ["", document.getElementById('cl_elec_2').value],
+                    ["", document.getElementById('cl_elec_3').value]
+                ];
+                wscols = [{ wch: 20 }, { wch: 80 }];
+            } else if (line === 'CRM_DAILY') {
+                wsData = [[`SeAH CM CRM LINE 일일현황 일지`], [], ["근무 일자", dateVal], [], ["[불량 현황]"], ["Batch", "유형", "사이즈", "등급", "중량", "특이사항"]];
+                for(let i=1; i<=4; i++) wsData.push([document.getElementById(`defect_batch_${i}`).value, document.getElementById(`defect_type_${i}`).value, document.getElementById(`defect_size_${i}`).value, document.getElementById(`defect_grade_${i}`).value, document.getElementById(`defect_weight_${i}`).value, document.getElementById(`defect_note_${i}`).value]);
+                wsData.push([], ["[비가동 현황]"], ["시작", "종료", "총시간", "내역", "특이사항"]);
+                for(let i=1; i<=4; i++) wsData.push([document.getElementById(`down_start_${i}`).value, document.getElementById(`down_end_${i}`).value, document.getElementById(`down_total_${i}`).value, document.getElementById(`down_detail_${i}`).value, document.getElementById(`down_note_${i}`).value]);
+                wsData.push([], ["[근무 일지]", "", `압연유 재고: ${document.getElementById('rolling_oil_qty').value}`], ["근무조", "작성자", "업무 내용"], ["1근", document.getElementById('name1_crm').value, document.getElementById('note1_crm').value], ["2근", document.getElementById('name2_crm').value, document.getElementById('note2_crm').value], ["3근", document.getElementById('name3_crm').value, document.getElementById('note3_crm').value]);
+                wscols = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 50 }];
+            } else if (line === 'CRM_DOWNTIME') {
+                wsData = [
+                    [`비가동 발생 보고서`], [],
+                    ["조사자", document.getElementById('dt_investigator').value, "일 시", document.getElementById('dt_datetime').value],
+                    ["조사일시", document.getElementById('dt_investigate_date').value, "설비명", document.getElementById('dt_equipment').value],
+                    ["사고개요", document.getElementById('dt_summary').value, "", ""],
+                    ["", document.getElementById('dt_details').value, "", ""],
+                    ["사고피해", document.getElementById('dt_damage').value, "", ""],
+                    ["조치 내용", document.getElementById('dt_action').value, "", ""],
+                    ["재발 방지 대책", document.getElementById('dt_prevention').value, "", ""]
+                ];
+                wscols = [{ wch: 20 }, { wch: 40 }, { wch: 20 }, { wch: 40 }];
+            }
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            ws['!cols'] = wscols;
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "시트1");
+            XLSX.writeFile(wb, `SeAH_${line}_${dateVal}.xlsx`);
+        }
+    </script>
+</body>
+</html>
